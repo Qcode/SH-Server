@@ -1,5 +1,20 @@
 {
   "dependencies": {
+    "eslint": "^4.19.1",
+    "express": "^4.16.3",
+    "prettier-eslint": "^8.8.1",
     "socket.io": "^2.1.0"
+  },
+  "scripts": {
+    "start": "node main.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "devDependencies": {
+    "eslint-config-airbnb": "^16.1.0",
+    "eslint-plugin-import": "^2.11.0",
+    "eslint-plugin-jsx-a11y": "^6.0.3",
+    "eslint-plugin-react": "^7.7.0",
+    "prettier": "1.12.1"
   }
 }
