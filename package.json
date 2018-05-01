@@ -1,12 +1,15 @@
 {
   "dependencies": {
+    "babel": "^6.23.0",
+    "babel-cli": "^6.26.0",
+    "babel-preset-env": "^1.6.1",
     "eslint": "^4.19.1",
     "express": "^4.16.3",
     "prettier-eslint": "^8.8.1",
     "socket.io": "^2.1.0"
   },
   "scripts": {
-    "start": "node src/main.js",
+    "start": "babel-node src/main.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
