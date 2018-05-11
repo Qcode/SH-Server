@@ -1,6 +1,9 @@
 class User {
-  constructor(socket) {
+  constructor(socket, username) {
     this.socket = socket;
+    this.username = username;
+
+    console.log(this.socket.id, this.username);
   }
 }
 

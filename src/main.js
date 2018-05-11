@@ -7,8 +7,7 @@ const io = require('socket.io')(http);
 const game = new GameManager();
 
 io.on('connection', (socket) => {
-  game.addUser(socket);
-  console.log('user connected', socket);
+  socket.on('join', data => game.addUser(socket, data.username));
   socket.on('disconnect', (reason) => {
     console.log(reason);
   });

@@ -5,8 +5,8 @@ class GameManager {
     this.users = {};
   }
 
-  addUser(socket) {
-    this.users[socket.id] = new User(socket);
+  addUser(socket, username) {
+    this.users[socket.id] = new User(socket, username);
   }
 }
 
