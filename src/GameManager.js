@@ -5,8 +5,13 @@ class GameManager {
     this.users = {};
   }
 
-  addUser(socket) {
-    this.users[socket.id] = new User(socket);
+  addUser(socket, username) {
+    const isHost = Object.keys(this.users).length === 0;
+    this.users[socket.id] = new User(socket, username, isHost);
+  }
+
+  isUserHost(userId) {
+    return this.users[userId].host;
   }
 }
 
