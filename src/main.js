@@ -7,7 +7,12 @@ const io = require('socket.io')(http);
 const game = new GameManager();
 
 io.on('connection', (socket) => {
-  socket.on('join', data => game.addUser(socket, data.username));
+  socket.on('join', (data, callback) => {
+    game.addUser(socket, data.username);
+    callback({
+      hostPrivileges: game.isUserHost(socket.id),
+    });
+  });
   socket.on('disconnect', (reason) => {
     console.log(reason);
   });
