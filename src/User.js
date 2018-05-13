@@ -4,6 +4,11 @@ class User {
     this.username = username;
     this.host = isHost;
   }
+
+  getInfo() {
+    const { socket, ...info } = this;
+    return info;
+  }
 }
 
 export default User;

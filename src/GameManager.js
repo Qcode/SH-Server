@@ -1,17 +1,27 @@
 import User from './User';
 
 class GameManager {
-  constructor() {
+  constructor(io) {
     this.users = {};
+    this.io = io;
   }
 
   addUser(socket, username) {
     const isHost = Object.keys(this.users).length === 0;
     this.users[socket.id] = new User(socket, username, isHost);
+    this.syncUsers();
   }
 
   isUserHost(userId) {
     return this.users[userId].host;
+  }
+
+  syncUsers() {
+    const dataToSend = {};
+    Object.keys(this.users).forEach((key) => {
+      dataToSend[key] = this.users[key].getInfo();
+    });
+    this.io.emit('users', dataToSend);
   }
 }
 
