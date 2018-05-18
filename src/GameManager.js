@@ -21,7 +21,10 @@ class GameManager {
     Object.keys(this.users).forEach((key) => {
       dataToSend[key] = this.users[key].getInfo();
     });
-    this.io.emit('users', dataToSend);
+    Object.keys(this.users).forEach((key) => {
+      dataToSend.primaryUserId = key;
+      this.users[key].socket.emit('users', dataToSend);
+    });
   }
 }
 
