@@ -12,10 +12,6 @@ class GameManager {
     this.syncUsers();
   }
 
-  isUserHost(userId) {
-    return this.users[userId].host;
-  }
-
   syncUsers() {
     const dataToSend = {};
     Object.keys(this.users).forEach((key) => {
