@@ -11,6 +11,13 @@ io.on('connection', (socket) => {
     game.addUser(socket, data.username);
     callback(); // This acknowledges the server received the join request
   });
+  socket.on('startGame', (_, callback) => {
+    if (game.canStartGame(socket.id)) {
+      game.startGame();
+    } else {
+      callback(403);
+    }
+  });
   socket.on('disconnect', (reason) => {
     console.log(reason);
   });
