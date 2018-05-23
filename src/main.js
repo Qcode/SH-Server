@@ -11,11 +11,23 @@ io.on('connection', (socket) => {
     game.addUser(socket, data.username);
     callback(); // This acknowledges the server received the join request
   });
-  socket.on('startGame', (_, callback) => {
+  socket.on('startGame', () => {
     if (game.canStartGame(socket.id)) {
       game.startGame();
     } else {
-      callback(403);
+      console.log('Invalid permissions to start game');
+    }
+  });
+  socket.on('submitChancellor', (chancellorId) => {
+    if (game.isValidChancellor(chancellorId, socket.id)) {
+      game.nominateChancellor(chancellorId);
+    } else {
+      console.log('Invalid chancellor submission');
+    }
+  });
+  socket.on('chancellorVote', (vote) => {
+    if (GameManager.isValidVote(vote)) {
+      game.logChancellorVote(socket.id, vote);
     }
   });
   socket.on('disconnect', (reason) => {
