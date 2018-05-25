@@ -4,11 +4,11 @@ This project aims to create an online version of the popular deception board gam
 
 ### Installation
 
-Dependencies are managed with `yarn`. To install, clone the repo and then run `yarn install`
+Dependencies are managed with [yarn](https://yarnpkg.com/). To install, clone the repo and then run `yarn install`
 
 ### Running
 
-To run the client, use the command `yarn run start`
+To run the server, use the command `yarn run start`
 
 ### Contributing
 
