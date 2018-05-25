@@ -29,7 +29,7 @@ class GameManager {
   }
 
   startGame() {
-    this.io.emit('startGame');
+    this.io.emit('CHANGE_GAME_STATE', 'game');
     this.io.emit('score', { liberal: this.liberalCardsPlayed, fascist: this.fascistCardsPlayed });
     this.assignRoles();
     this.syncUsers();
@@ -210,10 +210,20 @@ class GameManager {
         // Check for execution of presidential powers
       }
 
-      this.io.emit('score', { liberal: this.liberalCardsPlayed, fascist: this.fascistCardsPlayed });
+      if (this.liberalCardsPlayed === 5) {
+        this.emitGameOver('LIBERALS_WIN');
+      } else if (this.fascistCardsPlayed === 6) {
+        this.emitGameOver('FASCISTS_WIN');
+      } else {
+        // Continue game
+        this.io.emit('score', {
+          liberal: this.liberalCardsPlayed,
+          fascist: this.fascistCardsPlayed,
+        });
 
-      this.chooseNextChancellor();
-      this.syncUsers();
+        this.chooseNextChancellor();
+        this.syncUsers();
+      }
     }
     user.cards = [];
     user.socket.emit('user', user.getSelfInfo());
@@ -221,6 +231,11 @@ class GameManager {
 
   getUserCount() {
     return Object.keys(this.users).length;
+  }
+
+  emitGameOver(gameOverType) {
+    this.io.emit('CHANGE_GAME_STATE', 'gameOver');
+    this.io.emit('GAME_OVER_REASON', gameOverType);
   }
 }
 
