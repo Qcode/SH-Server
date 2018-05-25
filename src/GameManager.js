@@ -8,6 +8,14 @@ class GameManager {
     this.io = io;
     this.gameStage = 'chooseChancellor';
     this.currentPresidentIndex = 0;
+
+    this.drawPile = knuthShuffle(Array(17)
+      .fill('fascist', 0, 11)
+      .fill('liberal', 11));
+    this.discardPile = [];
+
+    this.liberalCardsPlayed = 0;
+    this.fascistCardsPlayed = 0;
   }
 
   addUser(socket, username) {
@@ -22,6 +30,7 @@ class GameManager {
 
   startGame() {
     this.io.emit('startGame');
+    this.io.emit('score', { liberal: this.liberalCardsPlayed, fascist: this.fascistCardsPlayed });
     this.assignRoles();
     this.syncUsers();
     this.setGameStage('chooseChancellor');
@@ -72,7 +81,10 @@ class GameManager {
       const dataToSend = {};
       dataToSend.primaryUserId = userReceivingInformationId;
       Object.keys(this.users).forEach((userDataId) => {
-        dataToSend[userDataId] = this.users[userDataId].getInfo(userReceivingInformation);
+        dataToSend[userDataId] =
+          userReceivingInformationId === userDataId
+            ? userReceivingInformation.getSelfInfo()
+            : this.users[userDataId].getInfo(userReceivingInformation);
       });
       userReceivingInformation.socket.emit('users', dataToSend);
     });
@@ -116,21 +128,9 @@ class GameManager {
     );
 
     if (totalVotes / this.getUserCount() > 0.5) {
-      this.setGameStage('presidentPolicySelect');
+      this.givePresidentCards();
     } else {
-      this.setGameStage('chooseChancellor');
-      // To-Do: Add anarchy tracking
-      Object.keys(this.users).forEach((userKey) => {
-        this.users[userKey].isChancellor = false;
-        this.users[userKey].isPresident = false;
-      });
-
-      this.currentPresidentIndex += 1;
-      if (this.currentPresidentIndex >= this.getUserCount()) {
-        this.currentPresidentIndex = 0;
-      }
-
-      this.users[Object.keys(this.users)[this.currentPresidentIndex]].isPresident = true;
+      this.chooseNextChancellor();
     }
 
     this.syncUsers();
@@ -141,8 +141,82 @@ class GameManager {
     this.gameStage = newStage;
   }
 
+  chooseNextChancellor() {
+    this.setGameStage('chooseChancellor');
+    // To-Do: Add anarchy tracking
+    Object.keys(this.users).forEach((userKey) => {
+      this.users[userKey].isChancellor = false;
+      this.users[userKey].isPresident = false;
+    });
+
+    this.currentPresidentIndex += 1;
+    if (this.currentPresidentIndex >= this.getUserCount()) {
+      this.currentPresidentIndex = 0;
+    }
+
+    this.users[Object.keys(this.users)[this.currentPresidentIndex]].isPresident = true;
+  }
+
+  givePresidentCards() {
+    if (this.drawPile.length < 3) {
+      this.drawPile = this.discardPile;
+      this.discardPile = [];
+      knuthShuffle(this.drawPile);
+    }
+    this.setGameStage('presidentPolicySelect');
+    const presidentUser = this.getPresidentUser();
+    presidentUser.cards = this.drawPile.slice(0, 3);
+    this.drawPile.splice(0, 3);
+    presidentUser.socket.emit('user', presidentUser.getSelfInfo());
+  }
+
+  getPresidentUser() {
+    return this.users[Object.keys(this.users).filter(key => this.users[key].isPresident)[0]];
+  }
+
+  getChancellorUser() {
+    return this.users[Object.keys(this.users).filter(key => this.users[key].isChancellor)[0]];
+  }
+
   static isValidVote(vote) {
     return vote === 0 || vote === 1;
+  }
+
+  isValidDiscard(card, userId) {
+    return (
+      ((this.gameStage === 'presidentPolicySelect' && userId === this.getPresidentUser().id) ||
+        (this.gameStage === 'chancellorPolicySelect' && userId === this.getChancellorUser().id)) &&
+      this.users[userId].cards.indexOf(card) !== -1
+    );
+  }
+
+  discardCard(card, userId) {
+    const user = this.users[userId];
+    this.discardPile.push(card);
+    user.cards.splice(user.cards.indexOf(card), 1);
+
+    if (user.isPresident) {
+      this.setGameStage('chancellorPolicySelect');
+
+      const chancellor = this.getChancellorUser();
+      chancellor.cards = user.cards;
+      chancellor.socket.emit('user', chancellor.getSelfInfo());
+    } else if (user.isChancellor) {
+      // Only card left, so hence card played;
+      if (user.cards[0] === 'liberal') {
+        this.liberalCardsPlayed += 1;
+      } else {
+        this.fascistCardsPlayed += 1;
+        // Check for execution of presidential powers
+      }
+
+      this.io.emit('score', { liberal: this.liberalCardsPlayed, fascist: this.fascistCardsPlayed });
+
+      this.chooseNextChancellor();
+      this.syncUsers();
+    }
+    user.cards = [];
+    user.socket.emit('user', user.getSelfInfo());
   }
 
   getUserCount() {

@@ -30,6 +30,11 @@ io.on('connection', (socket) => {
       game.logChancellorVote(socket.id, vote);
     }
   });
+  socket.on('discardCard', (card) => {
+    if (game.isValidDiscard(card, socket.id)) {
+      game.discardCard(card, socket.id);
+    }
+  });
   socket.on('disconnect', (reason) => {
     console.log(reason);
   });
