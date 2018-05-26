@@ -1,6 +1,7 @@
 import { knuthShuffle } from 'knuth-shuffle';
 import User from './User';
 import playerConfigurations from './PlayerConfigurations';
+import presidentialPowers from './PresidentialPowers';
 
 class GameManager {
   constructor(io) {
@@ -135,8 +136,6 @@ class GameManager {
     } else {
       this.chooseNextChancellor();
     }
-
-    this.syncUsers();
   }
 
   setGameStage(newStage) {
@@ -158,14 +157,11 @@ class GameManager {
     }
 
     this.users[Object.keys(this.users)[this.currentPresidentIndex]].isPresident = true;
+    this.syncUsers();
   }
 
   givePresidentCards() {
-    if (this.drawPile.length < 3) {
-      this.drawPile = this.discardPile;
-      this.discardPile = [];
-      knuthShuffle(this.drawPile);
-    }
+    this.drawPileShuffle();
     this.setGameStage('presidentPolicySelect');
     const presidentUser = this.getPresidentUser();
     presidentUser.cards = this.drawPile.slice(0, 3);
@@ -213,19 +209,29 @@ class GameManager {
         // Check for execution of presidential powers
       }
 
+      this.io.emit('SYNC_SCORE', {
+        liberal: this.liberalCardsPlayed,
+        fascist: this.fascistCardsPlayed,
+      });
+
+      let executedFascistPolicy = false;
+      if (user.cards[0] === 'fascist' && this.getFascistPower() === 'cardPeek') {
+        executedFascistPolicy = true;
+        this.setGameStage('fascistPower');
+        this.io.emit('FASCIST_POWER', this.getFascistPower());
+        if (this.getFascistPower() === 'cardPeek') {
+          this.drawPileShuffle();
+          this.getPresidentUser().socket.emit('FASCIST_INFO', this.drawPile.slice(0, 3));
+        }
+      }
+
       if (this.liberalCardsPlayed === 5) {
         this.emitGameOver('LIBERALS_WIN');
       } else if (this.fascistCardsPlayed === 6) {
         this.emitGameOver('FASCISTS_WIN');
-      } else {
+      } else if (!executedFascistPolicy) {
         // Continue game
-        this.io.emit('SYNC_SCORE', {
-          liberal: this.liberalCardsPlayed,
-          fascist: this.fascistCardsPlayed,
-        });
-
         this.chooseNextChancellor();
-        this.syncUsers();
       }
     }
     user.cards = [];
@@ -239,6 +245,44 @@ class GameManager {
   emitGameOver(gameOverType) {
     this.io.emit('SET_GAME_STATE', 'gameOver');
     this.io.emit('GAME_OVER_REASON', gameOverType);
+  }
+
+  getGameSize() {
+    return {
+      5: 'small',
+      6: 'small',
+      7: 'medium',
+      8: 'medium',
+      9: 'large',
+      10: 'large',
+    }[this.getUserCount()];
+  }
+
+  drawPileShuffle() {
+    if (this.drawPile.length < 3) {
+      this.drawPile = this.discardPile;
+      this.discardPile = [];
+      knuthShuffle(this.drawPile);
+    }
+  }
+
+  canEnactFascistPower(userId) {
+    return this.gameStage === 'fascistPower' && this.getPresidentUser().id === userId;
+  }
+
+  enactFascistPower(info) {
+    const actions = {
+      cardPeek: () => {},
+    };
+
+    console.log('info from fascist power', info);
+
+    actions[this.getFascistPower()]();
+    this.chooseNextChancellor();
+  }
+
+  getFascistPower() {
+    return presidentialPowers[this.getGameSize()][this.fascistCardsPlayed - 1];
   }
 }
 

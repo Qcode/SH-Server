@@ -35,6 +35,11 @@ io.on('connection', (socket) => {
       game.discardCard(card, socket.id);
     }
   });
+  socket.on('ENACT_FASCIST_POWER', (info) => {
+    if (game.canEnactFascistPower(socket.id)) {
+      game.enactFascistPower(info);
+    }
+  });
   socket.on('disconnect', (reason) => {
     console.log(reason);
   });
