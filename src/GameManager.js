@@ -29,8 +29,11 @@ class GameManager {
   }
 
   startGame() {
-    this.io.emit('CHANGE_GAME_STATE', 'game');
-    this.io.emit('score', { liberal: this.liberalCardsPlayed, fascist: this.fascistCardsPlayed });
+    this.io.emit('SET_GAME_STATE', 'game');
+    this.io.emit('SYNC_SCORE', {
+      liberal: this.liberalCardsPlayed,
+      fascist: this.fascistCardsPlayed,
+    });
     this.assignRoles();
     this.syncUsers();
     this.setGameStage('chooseChancellor');
@@ -86,7 +89,7 @@ class GameManager {
             ? userReceivingInformation.getSelfInfo()
             : this.users[userDataId].getInfo(userReceivingInformation);
       });
-      userReceivingInformation.socket.emit('users', dataToSend);
+      userReceivingInformation.socket.emit('SYNC_USERS', dataToSend);
     });
   }
 
@@ -137,7 +140,7 @@ class GameManager {
   }
 
   setGameStage(newStage) {
-    this.io.emit('gameStage', newStage);
+    this.io.emit('SET_GAME_STAGE', newStage);
     this.gameStage = newStage;
   }
 
@@ -167,7 +170,7 @@ class GameManager {
     const presidentUser = this.getPresidentUser();
     presidentUser.cards = this.drawPile.slice(0, 3);
     this.drawPile.splice(0, 3);
-    presidentUser.socket.emit('user', presidentUser.getSelfInfo());
+    presidentUser.socket.emit('SYNC_USER', presidentUser.getSelfInfo());
   }
 
   getPresidentUser() {
@@ -200,7 +203,7 @@ class GameManager {
 
       const chancellor = this.getChancellorUser();
       chancellor.cards = user.cards;
-      chancellor.socket.emit('user', chancellor.getSelfInfo());
+      chancellor.socket.emit('SYNC_USER', chancellor.getSelfInfo());
     } else if (user.isChancellor) {
       // Only card left, so hence card played;
       if (user.cards[0] === 'liberal') {
@@ -216,7 +219,7 @@ class GameManager {
         this.emitGameOver('FASCISTS_WIN');
       } else {
         // Continue game
-        this.io.emit('score', {
+        this.io.emit('SYNC_SCORE', {
           liberal: this.liberalCardsPlayed,
           fascist: this.fascistCardsPlayed,
         });
@@ -226,7 +229,7 @@ class GameManager {
       }
     }
     user.cards = [];
-    user.socket.emit('user', user.getSelfInfo());
+    user.socket.emit('SYNC_USER', user.getSelfInfo());
   }
 
   getUserCount() {
@@ -234,7 +237,7 @@ class GameManager {
   }
 
   emitGameOver(gameOverType) {
-    this.io.emit('CHANGE_GAME_STATE', 'gameOver');
+    this.io.emit('SET_GAME_STATE', 'gameOver');
     this.io.emit('GAME_OVER_REASON', gameOverType);
   }
 }
