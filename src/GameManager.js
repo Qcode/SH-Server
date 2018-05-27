@@ -138,9 +138,15 @@ class GameManager {
     );
 
     if (totalVotes / this.getActiveUserCount() > 0.5) {
+      // Motion passed
+      if (this.getChancellorUser().isHitler && this.fascistCardsPlayed >= 3) {
+        this.emitGameOver('HITLER_ELECTED');
+        return;
+      }
       this.adjustTermLimits();
       this.givePresidentCards();
     } else {
+      // Motion failed
       this.chooseNextChancellor();
     }
   }
