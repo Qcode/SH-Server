@@ -99,6 +99,7 @@ class GameManager {
     return (
       this.users[presidentId].isPresident &&
       this.users[chancellorId] &&
+      !this.users[chancellorId].isDead &&
       this.gameStage === 'chooseChancellor'
     );
   }
@@ -116,7 +117,10 @@ class GameManager {
     this.users[playerId].voteCast = vote;
     const allVotesCast = Object.keys(this.users).reduce(
       (acc, userKey) =>
-        (this.users[userKey].voteCast === 0 || this.users[userKey].voteCast === 1) && acc,
+        (this.users[userKey].voteCast === 0 ||
+          this.users[userKey].voteCast === 1 ||
+          this.users[userKey].isDead) &&
+        acc,
       true,
     );
 
@@ -127,11 +131,11 @@ class GameManager {
 
   countChancellorVotes() {
     const totalVotes = Object.keys(this.users).reduce(
-      (acc, userKey) => acc + this.users[userKey].voteCast,
+      (acc, userKey) => acc + (!this.users[userKey].isDead ? this.users[userKey].voteCast : 0),
       0,
     );
 
-    if (totalVotes / this.getUserCount() > 0.5) {
+    if (totalVotes / this.getActiveUserCount() > 0.5) {
       this.givePresidentCards();
     } else {
       this.chooseNextChancellor();
@@ -151,12 +155,21 @@ class GameManager {
       this.users[userKey].isPresident = false;
     });
 
-    this.currentPresidentIndex += 1;
-    if (this.currentPresidentIndex >= this.getUserCount()) {
-      this.currentPresidentIndex = 0;
+    const presidentIndexToUser = index => this.users[Object.keys(this.users)[index]];
+
+    let chosenPresident = false;
+    while (!chosenPresident) {
+      chosenPresident = true;
+      this.currentPresidentIndex += 1;
+      if (this.currentPresidentIndex >= this.getUserCount()) {
+        this.currentPresidentIndex = 0;
+      }
+      if (presidentIndexToUser(this.currentPresidentIndex).isDead) {
+        chosenPresident = false;
+      }
     }
 
-    this.users[Object.keys(this.users)[this.currentPresidentIndex]].isPresident = true;
+    presidentIndexToUser(this.currentPresidentIndex).isPresident = true;
     this.syncUsers();
   }
 
@@ -215,7 +228,7 @@ class GameManager {
       });
 
       let executedFascistPolicy = false;
-      if (user.cards[0] === 'fascist' && this.getFascistPower() === 'cardPeek') {
+      if (user.cards[0] === 'fascist' && this.getFascistPower() !== 'none') {
         executedFascistPolicy = true;
         this.setGameStage('fascistPower');
         this.io.emit('FASCIST_POWER', this.getFascistPower());
@@ -242,6 +255,10 @@ class GameManager {
     return Object.keys(this.users).length;
   }
 
+  getActiveUserCount() {
+    return Object.keys(this.users).filter(userId => !this.users[userId].isDead).length;
+  }
+
   emitGameOver(gameOverType) {
     this.io.emit('SET_GAME_STATE', 'gameOver');
     this.io.emit('GAME_OVER_REASON', gameOverType);
@@ -266,16 +283,22 @@ class GameManager {
     }
   }
 
-  canEnactFascistPower(userId) {
-    return this.gameStage === 'fascistPower' && this.getPresidentUser().id === userId;
+  canEnactFascistPower(userEnacting, userToEnact) {
+    const ableToEnactOnUser = userToEnact ? !this.users[userToEnact].isDead : true;
+    return (
+      this.gameStage === 'fascistPower' &&
+      this.getPresidentUser().id === userEnacting &&
+      ableToEnactOnUser
+    );
   }
 
   enactFascistPower(info) {
     const actions = {
       cardPeek: () => {},
+      kill: () => {
+        this.users[info].isDead = true;
+      },
     };
-
-    console.log('info from fascist power', info);
 
     actions[this.getFascistPower()]();
     this.chooseNextChancellor();
