@@ -10,6 +10,7 @@ class User {
     this.isPresident = false;
     this.voteCast = 'uncast';
     this.cards = [];
+    this.isDead = false;
   }
 
   getInfo(userReceivingData) {

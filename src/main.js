@@ -36,7 +36,7 @@ io.on('connection', (socket) => {
     }
   });
   socket.on('ENACT_FASCIST_POWER', (info) => {
-    if (game.canEnactFascistPower(socket.id)) {
+    if (game.canEnactFascistPower(socket.id, info)) {
       game.enactFascistPower(info);
     }
   });
