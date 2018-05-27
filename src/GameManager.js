@@ -55,8 +55,7 @@ class GameManager {
     }
     knuthShuffle(options);
     let iterator = 0;
-    Object.keys(this.users).forEach((key) => {
-      const user = this.users[key];
+    Object.values(this.users).forEach((user) => {
       switch (options[iterator]) {
         case 'hitler': {
           user.isLiberal = false;
@@ -79,7 +78,7 @@ class GameManager {
 
     const president = Math.floor(Math.random() * this.getUserCount());
     this.currentPresidentIndex = president;
-    this.users[Object.keys(this.users)[president]].isPresident = true;
+    Object.values(this.users)[president].isPresident = true;
   }
 
   syncUsers() {
@@ -110,8 +109,8 @@ class GameManager {
   }
 
   nominateChancellor(chancellorId) {
-    Object.keys(this.users).forEach((userKey) => {
-      this.users[userKey].voteCast = 'uncast';
+    Object.values(this.users).forEach((user) => {
+      user.voteCast = 'uncast';
     });
     this.users[chancellorId].isChancellor = true;
     this.syncUsers();
@@ -120,12 +119,8 @@ class GameManager {
 
   logChancellorVote(playerId, vote) {
     this.users[playerId].voteCast = vote;
-    const allVotesCast = Object.keys(this.users).reduce(
-      (acc, userKey) =>
-        (this.users[userKey].voteCast === 0 ||
-          this.users[userKey].voteCast === 1 ||
-          this.users[userKey].isDead) &&
-        acc,
+    const allVotesCast = Object.values(this.users).reduce(
+      (acc, user) => (user.voteCast === 0 || user.voteCast === 1 || user.isDead) && acc,
       true,
     );
 
@@ -135,8 +130,8 @@ class GameManager {
   }
 
   countChancellorVotes() {
-    const totalVotes = Object.keys(this.users).reduce(
-      (acc, userKey) => acc + (!this.users[userKey].isDead ? this.users[userKey].voteCast : 0),
+    const totalVotes = Object.values(this.users).reduce(
+      (acc, user) => acc + (!user.isDead ? user.voteCast : 0),
       0,
     );
 
@@ -158,8 +153,8 @@ class GameManager {
         );
         this.passTopPolicy();
         this.drawPileShuffle();
-        Object.keys(this.users).forEach((userId) => {
-          this.users[userId].isTermLimited = false;
+        Object.values(this.users).forEach((user) => {
+          user.isTermLimited = false;
         });
       }
       // Motion failed
@@ -175,13 +170,12 @@ class GameManager {
 
   chooseNextChancellor() {
     this.setGameStage('chooseChancellor');
-    // To-Do: Add anarchy tracking
-    Object.keys(this.users).forEach((userKey) => {
-      this.users[userKey].isChancellor = false;
-      this.users[userKey].isPresident = false;
+    Object.values(this.users).forEach((user) => {
+      user.isChancellor = false;
+      user.isPresident = false;
     });
 
-    const presidentIndexToUser = index => this.users[Object.keys(this.users)[index]];
+    const presidentIndexToUser = index => Object.values(this.users)[index];
 
     let chosenPresident = false;
     while (!chosenPresident) {
@@ -209,11 +203,11 @@ class GameManager {
   }
 
   getPresidentUser() {
-    return this.users[Object.keys(this.users).filter(key => this.users[key].isPresident)[0]];
+    return Object.values(this.users).filter(user => user.isPresident)[0];
   }
 
   getChancellorUser() {
-    return this.users[Object.keys(this.users).filter(key => this.users[key].isChancellor)[0]];
+    return Object.values(this.users).filter(user => user.isChancellor)[0];
   }
 
   static isValidVote(vote) {
@@ -271,7 +265,7 @@ class GameManager {
   }
 
   getActiveUserCount() {
-    return Object.keys(this.users).filter(userId => !this.users[userId].isDead).length;
+    return Object.values(this.users).filter(user => !user.isDead).length;
   }
 
   emitGameOver(gameOverType) {
@@ -310,10 +304,39 @@ class GameManager {
   }
 
   enactFascistPower(info) {
+    const memoToUsersExcludingPresident = (string) => {
+      Object.values(this.users)
+        .filter(user => !user.isPresident)
+        .forEach(user => user.socket.emit('GET_MEMO', string));
+    };
+
     const actions = {
-      cardPeek: () => {},
+      cardPeek: () => {
+        memoToUsersExcludingPresident(`${this.getPresidentUser().username} has seen the top 3 cards in the draw pile.`);
+      },
       kill: () => {
+        memoToUsersExcludingPresident(`${this.getPresidentUser().username} has executed ${this.users[info].username}.`);
         this.users[info].isDead = true;
+      },
+      inspect: () => {
+        memoToUsersExcludingPresident(`${this.getPresidentUser().username} has inspected ${this.users[info].username}'s party`);
+        const partyAffiliation = this.users[info].isLiberal ? 'liberal' : 'fascist';
+        this.getPresidentUser().socket.emit(
+          'GET_MEMO',
+          `${this.users[info].username} is a ${partyAffiliation}`,
+        );
+      },
+      election: () => {
+        memoToUsersExcludingPresident(`${this.getPresidentUser().username} has chosen ${
+          this.users[info].username
+        } to be president through a special election`);
+        this.setGameStage('chooseChancellor');
+        Object.values(this.users).forEach((user) => {
+          user.isChancellor = false;
+          user.isPresident = false;
+        });
+        this.users[info].isPresident = true;
+        this.syncUsers();
       },
     };
 
@@ -323,7 +346,9 @@ class GameManager {
     }
 
     actions[this.getFascistPower()]();
-    this.chooseNextChancellor();
+    if (this.getFascistPower() !== 'election') {
+      this.chooseNextChancellor();
+    }
   }
 
   getFascistPower() {
@@ -331,8 +356,8 @@ class GameManager {
   }
 
   adjustTermLimits() {
-    Object.keys(this.users).forEach((userId) => {
-      this.users[userId].isTermLimited = false;
+    Object.values(this.users).forEach((user) => {
+      user.isTermLimited = false;
     });
     this.getChancellorUser().isTermLimited = true;
     if (this.getActiveUserCount() > 5) {
