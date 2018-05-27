@@ -11,6 +11,7 @@ class User {
     this.voteCast = 'uncast';
     this.cards = [];
     this.isDead = false;
+    this.isTermLimited = false;
   }
 
   getInfo(userReceivingData) {

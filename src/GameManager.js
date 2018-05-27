@@ -98,8 +98,10 @@ class GameManager {
     // To-Do: Keep track of users for term limits
     return (
       this.users[presidentId].isPresident &&
+      chancellorId !== presidentId &&
       this.users[chancellorId] &&
       !this.users[chancellorId].isDead &&
+      !this.users[chancellorId].isTermLimited &&
       this.gameStage === 'chooseChancellor'
     );
   }
@@ -136,6 +138,7 @@ class GameManager {
     );
 
     if (totalVotes / this.getActiveUserCount() > 0.5) {
+      this.adjustTermLimits();
       this.givePresidentCards();
     } else {
       this.chooseNextChancellor();
@@ -288,6 +291,7 @@ class GameManager {
     return (
       this.gameStage === 'fascistPower' &&
       this.getPresidentUser().id === userEnacting &&
+      this.getPresidentUser().id !== userToEnact &&
       ableToEnactOnUser
     );
   }
@@ -306,6 +310,17 @@ class GameManager {
 
   getFascistPower() {
     return presidentialPowers[this.getGameSize()][this.fascistCardsPlayed - 1];
+  }
+
+  adjustTermLimits() {
+    Object.keys(this.users).forEach((userId) => {
+      this.users[userId].isTermLimited = false;
+    });
+    this.getChancellorUser().isTermLimited = true;
+    if (this.getActiveUserCount() > 5) {
+      this.getPresidentUser().isTermLimited = true;
+    }
+    this.syncUsers();
   }
 }
 
