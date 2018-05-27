@@ -17,6 +17,9 @@ class GameManager {
 
     this.liberalCardsPlayed = 0;
     this.fascistCardsPlayed = 0;
+    this.failedGovernmentCounter = 0;
+
+    this.gameOver = false;
   }
 
   addUser(socket, username) {
@@ -146,9 +149,23 @@ class GameManager {
       this.adjustTermLimits();
       this.givePresidentCards();
     } else {
+      this.failedGovernmentCounter += 1;
+      if (this.failedGovernmentCounter === 3) {
+        this.failedGovernmentCounter = 0;
+        this.io.emit(
+          'GET_MEMO',
+          `A ${this.drawPile[0]} policy was passed because of 3 failed governments`,
+        );
+        this.passTopPolicy();
+        this.drawPileShuffle();
+        Object.keys(this.users).forEach((userId) => {
+          this.users[userId].isTermLimited = false;
+        });
+      }
       // Motion failed
       this.chooseNextChancellor();
     }
+    this.io.emit('SYNC_FAILED_GOVERNMENTS', this.failedGovernmentCounter);
   }
 
   setGameStage(newStage) {
@@ -224,36 +241,25 @@ class GameManager {
       chancellor.socket.emit('SYNC_USER', chancellor.getSelfInfo());
     } else if (user.isChancellor) {
       // Only card left, so hence card played;
-      if (user.cards[0] === 'liberal') {
-        this.liberalCardsPlayed += 1;
-      } else {
-        this.fascistCardsPlayed += 1;
-        // Check for execution of presidential powers
-      }
+      this.passPolicy(user.cards[0]);
 
-      this.io.emit('SYNC_SCORE', {
-        liberal: this.liberalCardsPlayed,
-        fascist: this.fascistCardsPlayed,
-      });
-
-      let executedFascistPolicy = false;
-      if (user.cards[0] === 'fascist' && this.getFascistPower() !== 'none') {
-        executedFascistPolicy = true;
-        this.setGameStage('fascistPower');
-        this.io.emit('FASCIST_POWER', this.getFascistPower());
-        if (this.getFascistPower() === 'cardPeek') {
-          this.drawPileShuffle();
-          this.getPresidentUser().socket.emit('FASCIST_INFO', this.drawPile.slice(0, 3));
+      // Passing policy may have ended game. If not, then...
+      if (!this.gameOver) {
+        let executedFascistPolicy = false;
+        if (user.cards[0] === 'fascist' && this.getFascistPower() !== 'none') {
+          executedFascistPolicy = true;
+          this.setGameStage('fascistPower');
+          this.io.emit('FASCIST_POWER', this.getFascistPower());
+          if (this.getFascistPower() === 'cardPeek') {
+            this.drawPileShuffle();
+            this.getPresidentUser().socket.emit('FASCIST_INFO', this.drawPile.slice(0, 3));
+          }
         }
-      }
 
-      if (this.liberalCardsPlayed === 5) {
-        this.emitGameOver('LIBERALS_WIN');
-      } else if (this.fascistCardsPlayed === 6) {
-        this.emitGameOver('FASCISTS_WIN');
-      } else if (!executedFascistPolicy) {
-        // Continue game
-        this.chooseNextChancellor();
+        if (!executedFascistPolicy) {
+          // Continue game
+          this.chooseNextChancellor();
+        }
       }
     }
     user.cards = [];
@@ -271,6 +277,7 @@ class GameManager {
   emitGameOver(gameOverType) {
     this.io.emit('SET_GAME_STATE', 'gameOver');
     this.io.emit('GAME_OVER_REASON', gameOverType);
+    this.gameOver = true;
   }
 
   getGameSize() {
@@ -332,6 +339,33 @@ class GameManager {
       this.getPresidentUser().isTermLimited = true;
     }
     this.syncUsers();
+  }
+
+  passTopPolicy() {
+    this.passPolicy(this.drawPile[0]);
+    this.drawPile.splice(0, 1);
+  }
+
+  passPolicy(card) {
+    this.failedGovernmentCounter = 0;
+    if (card === 'liberal') {
+      this.liberalCardsPlayed += 1;
+    } else {
+      this.fascistCardsPlayed += 1;
+    }
+
+    this.io.emit('SYNC_SCORE', {
+      liberal: this.liberalCardsPlayed,
+      fascist: this.fascistCardsPlayed,
+    });
+
+    this.io.emit('SYNC_FAILED_GOVERNMENTS', this.failedGovernmentCounter);
+
+    if (this.liberalCardsPlayed === 5) {
+      this.emitGameOver('LIBERALS_WIN');
+    } else if (this.fascistCardsPlayed === 6) {
+      this.emitGameOver('FASCISTS_WIN');
+    }
   }
 }
 
