@@ -310,6 +310,11 @@ class GameManager {
       },
     };
 
+    if (this.getFascistPower() === 'kill' && this.users[info].isHitler) {
+      this.emitGameOver('HITLER_SHOT');
+      return;
+    }
+
     actions[this.getFascistPower()]();
     this.chooseNextChancellor();
   }
