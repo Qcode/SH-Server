@@ -40,6 +40,16 @@ io.on('connection', (socket) => {
       game.enactFascistPower(info);
     }
   });
+  socket.on('SUBMIT_VETO_REQUEST', () => {
+    if (game.canSubmitVetoRequest(socket.id)) {
+      game.sendVetoRequest();
+    }
+  });
+  socket.on('RESPOND_VETO_REQUEST', (response) => {
+    if (game.canRespondVetoRequest(socket.id)) {
+      game.handleVetoResponse(response);
+    }
+  });
   socket.on('disconnect', (reason) => {
     console.log(reason);
   });
