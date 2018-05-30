@@ -12,11 +12,12 @@ class User {
     this.cards = [];
     this.isDead = false;
     this.isTermLimited = false;
+    this.usedVeto = false;
   }
 
-  getInfo(userReceivingData) {
+  getInfo(deservesFullInfo) {
     const { socket, cards, ...fullInfo } = this;
-    if (userReceivingData.id === this.id || !userReceivingData.isLiberal) {
+    if (deservesFullInfo) {
       return fullInfo;
     }
     const { isLiberal, isHitler, ...minisculeInfo } = fullInfo;

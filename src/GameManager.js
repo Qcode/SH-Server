@@ -90,10 +90,17 @@ class GameManager {
         dataToSend[userDataId] =
           userReceivingInformationId === userDataId
             ? userReceivingInformation.getSelfInfo()
-            : this.users[userDataId].getInfo(userReceivingInformation);
+            : this.users[userDataId].getInfo(this.deservesFullInfo(userReceivingInformation));
       });
       userReceivingInformation.socket.emit('SYNC_USERS', dataToSend);
     });
+  }
+
+  deservesFullInfo(user) {
+    return (
+      (this.getGameSize() === 'small' && !user.isLiberal) ||
+      (this.getGameSize() !== 'small' && !user.isLiberal && !user.isHitler)
+    );
   }
 
   isValidChancellor(chancellorId, presidentId) {
@@ -391,10 +398,7 @@ class GameManager {
 
   sendVetoRequest() {
     this.getChancellorUser().usedVeto = true;
-    this.getPresidentUser().socket.emit(
-      'SYNC_USER',
-      this.getChancellorUser().getInfo(this.getPresidentUser()),
-    );
+    this.syncUsers();
   }
 
   canRespondVetoRequest(userId) {
