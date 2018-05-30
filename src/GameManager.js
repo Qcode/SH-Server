@@ -16,8 +16,10 @@ class GameManager {
     this.discardPile = [];
 
     this.liberalCardsPlayed = 0;
-    this.fascistCardsPlayed = 0;
+    this.fascistCardsPlayed = 5;
     this.failedGovernmentCounter = 0;
+
+    this.usedVeto = false;
 
     this.gameOver = false;
   }
@@ -144,23 +146,10 @@ class GameManager {
       this.adjustTermLimits();
       this.givePresidentCards();
     } else {
-      this.failedGovernmentCounter += 1;
-      if (this.failedGovernmentCounter === 3) {
-        this.failedGovernmentCounter = 0;
-        this.io.emit(
-          'GET_MEMO',
-          `A ${this.drawPile[0]} policy was passed because of 3 failed governments`,
-        );
-        this.passTopPolicy();
-        this.drawPileShuffle();
-        Object.values(this.users).forEach((user) => {
-          user.isTermLimited = false;
-        });
-      }
+      this.increaseFailedGovernments();
       // Motion failed
       this.chooseNextChancellor();
     }
-    this.io.emit('SYNC_FAILED_GOVERNMENTS', this.failedGovernmentCounter);
   }
 
   setGameStage(newStage) {
@@ -174,6 +163,8 @@ class GameManager {
       user.isChancellor = false;
       user.isPresident = false;
     });
+
+    this.usedVeto = false;
 
     const presidentIndexToUser = index => Object.values(this.users)[index];
 
@@ -391,6 +382,59 @@ class GameManager {
     } else if (this.fascistCardsPlayed === 6) {
       this.emitGameOver('FASCISTS_WIN');
     }
+  }
+
+  canSubmitVetoRequest(userId) {
+    return (
+      this.fascistCardsPlayed === 5 && userId === this.getChancellorUser().id && !this.usedVeto
+    );
+  }
+
+  sendVetoRequest() {
+    this.getPresidentUser().socket.emit('RECEIVE_VETO_REQUEST');
+    this.usedVeto = true;
+  }
+
+  canRespondVetoRequest(userId) {
+    return this.fascistCardsPlayed === 5 && userId === this.getPresidentUser().id && this.usedVeto;
+  }
+
+  handleVetoResponse(response) {
+    if (response) {
+      this.discardPile = this.discardPile.concat(this.getChancellorUser().cards);
+      this.increaseFailedGovernments();
+      this.io.emit(
+        'GET_MEMO',
+        `${this.getPresidentUser().username} has approved ${
+          this.getChancellorUser().username
+        }'s veto request`,
+      );
+      this.chooseNextChancellor();
+    } else {
+      this.io.emit(
+        'GET_MEMO',
+        `${this.getPresidentUser().username} has denied ${
+          this.getChancellorUser().username
+        }'s veto request`,
+      );
+    }
+  }
+
+  increaseFailedGovernments() {
+    this.failedGovernmentCounter += 1;
+    if (this.failedGovernmentCounter === 3) {
+      this.failedGovernmentCounter = 0;
+      this.io.emit(
+        'GET_MEMO',
+        `A ${this.drawPile[0]} policy was passed because of 3 failed governments`,
+      );
+      this.passTopPolicy();
+      this.drawPileShuffle();
+      Object.values(this.users).forEach((user) => {
+        user.isTermLimited = false;
+      });
+    }
+    this.io.emit('SYNC_FAILED_GOVERNMENTS', this.failedGovernmentCounter);
   }
 }
 
