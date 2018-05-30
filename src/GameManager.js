@@ -16,10 +16,8 @@ class GameManager {
     this.discardPile = [];
 
     this.liberalCardsPlayed = 0;
-    this.fascistCardsPlayed = 5;
+    this.fascistCardsPlayed = 0;
     this.failedGovernmentCounter = 0;
-
-    this.usedVeto = false;
 
     this.gameOver = false;
   }
@@ -162,9 +160,8 @@ class GameManager {
     Object.values(this.users).forEach((user) => {
       user.isChancellor = false;
       user.isPresident = false;
+      user.usedVeto = false;
     });
-
-    this.usedVeto = false;
 
     const presidentIndexToUser = index => Object.values(this.users)[index];
 
@@ -386,17 +383,27 @@ class GameManager {
 
   canSubmitVetoRequest(userId) {
     return (
-      this.fascistCardsPlayed === 5 && userId === this.getChancellorUser().id && !this.usedVeto
+      this.fascistCardsPlayed === 5 &&
+      userId === this.getChancellorUser().id &&
+      !this.getChancellorUser().usedVeto
     );
   }
 
   sendVetoRequest() {
-    this.getPresidentUser().socket.emit('RECEIVE_VETO_REQUEST');
-    this.usedVeto = true;
+    this.getChancellorUser().usedVeto = true;
+    this.getPresidentUser().socket.emit(
+      'SYNC_USER',
+      this.getChancellorUser().getInfo(this.getPresidentUser()),
+    );
   }
 
   canRespondVetoRequest(userId) {
-    return this.fascistCardsPlayed === 5 && userId === this.getPresidentUser().id && this.usedVeto;
+    return (
+      this.fascistCardsPlayed === 5 &&
+      userId === this.getPresidentUser().id &&
+      this.getChancellorUser().usedVeto &&
+      !this.getPresidentUser().usedVeto
+    );
   }
 
   handleVetoResponse(response) {
@@ -417,6 +424,7 @@ class GameManager {
           this.getChancellorUser().username
         }'s veto request`,
       );
+      this.getPresidentUser().usedVeto = true;
     }
   }
 
