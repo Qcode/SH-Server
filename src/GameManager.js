@@ -19,7 +19,8 @@ class GameManager {
     this.fascistCardsPlayed = 0;
     this.failedGovernmentCounter = 0;
 
-    this.gameOver = false;
+    // Reset when game starts
+    this.gameOver = true;
   }
 
   addUser(socket, username) {
@@ -33,6 +34,7 @@ class GameManager {
   }
 
   startGame() {
+    this.gameOver = false;
     this.io.emit('SET_GAME_STATE', 'game');
     this.io.emit('SYNC_SCORE', {
       liberal: this.liberalCardsPlayed,
@@ -484,6 +486,10 @@ class GameManager {
       });
     }
     this.io.emit('SYNC_FAILED_GOVERNMENTS', this.failedGovernmentCounter);
+  }
+
+  hasUserWithUsername(username) {
+    return Object.values(this.users).findIndex(user => user.username === username) !== -1;
   }
 }
 
