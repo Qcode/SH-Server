@@ -13,6 +13,7 @@ class User {
     this.isDead = false;
     this.isTermLimited = false;
     this.usedVeto = false;
+    this.roleImage = 1;
   }
 
   getInfo(deservesFullInfo) {
@@ -20,7 +21,9 @@ class User {
     if (deservesFullInfo) {
       return fullInfo;
     }
-    const { isLiberal, isHitler, ...minisculeInfo } = fullInfo;
+    const {
+      isLiberal, isHitler, roleImage, ...minisculeInfo
+    } = fullInfo;
     return minisculeInfo;
   }
 

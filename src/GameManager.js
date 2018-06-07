@@ -53,6 +53,8 @@ class GameManager {
     for (let x = 0; x < configuartion.liberals; x += 1) {
       options.push('liberal');
     }
+    const liberalRoleImages = knuthShuffle([1, 2, 3, 4, 5, 6]);
+    const fascistRoleImages = knuthShuffle([1, 2, 3]);
     knuthShuffle(options);
     let iterator = 0;
     Object.values(this.users).forEach((user) => {
@@ -65,12 +67,14 @@ class GameManager {
         case 'fascist': {
           user.isLiberal = false;
           user.isHitler = false;
+          user.roleImage = fascistRoleImages.pop();
           break;
         }
         default: {
           // Liberal
           user.isLiberal = true;
           user.isHitler = false;
+          user.roleImage = liberalRoleImages.pop();
         }
       }
       iterator += 1;
@@ -266,6 +270,23 @@ class GameManager {
   emitGameOver(gameOverType) {
     this.io.emit('SET_GAME_STATE', 'gameOver');
     this.io.emit('GAME_OVER_REASON', gameOverType);
+
+    const dataToSend = {};
+
+    Object.values(this.users).forEach((user) => {
+      user.isDead = false;
+      user.isChancellor = false;
+      user.isPresident = false;
+      user.voteCast = 'uncast';
+      dataToSend[user.id] = user.getSelfInfo();
+    });
+
+    // Reveal everyone's roles in game over screen
+    Object.values(this.users).forEach((user) => {
+      dataToSend.primaryUserId = user.id;
+      user.socket.emit('SYNC_USERS', dataToSend);
+    });
+
     this.gameOver = true;
   }
 
@@ -299,32 +320,46 @@ class GameManager {
   }
 
   enactFascistPower(info) {
-    const memoToUsersExcludingPresident = (string) => {
+    const memoToUsersExcludingPresident = (message) => {
       Object.values(this.users)
         .filter(user => !user.isPresident)
-        .forEach(user => user.socket.emit('GET_MEMO', string));
+        .forEach(user => user.socket.emit('GET_MEMO', message));
     };
 
     const actions = {
       cardPeek: () => {
-        memoToUsersExcludingPresident(`${this.getPresidentUser().username} has seen the top 3 cards in the draw pile.`);
+        memoToUsersExcludingPresident({
+          text: `${this.getPresidentUser().username} has seen the top 3 cards in the draw pile.`,
+          graphics: [this.getPresidentUser().id],
+        });
       },
       kill: () => {
-        memoToUsersExcludingPresident(`${this.getPresidentUser().username} has executed ${this.users[info].username}.`);
+        memoToUsersExcludingPresident({
+          text: `${this.getPresidentUser().username} has executed ${this.users[info].username}.`,
+          graphics: [this.getPresidentUser().id, info],
+        });
         this.users[info].isDead = true;
       },
       inspect: () => {
-        memoToUsersExcludingPresident(`${this.getPresidentUser().username} has inspected ${this.users[info].username}'s party`);
+        memoToUsersExcludingPresident({
+          text: `${this.getPresidentUser().username} has inspected ${
+            this.users[info].username
+          }'s party`,
+          graphics: [this.getPresidentUser().id, info],
+        });
         const partyAffiliation = this.users[info].isLiberal ? 'liberal' : 'fascist';
-        this.getPresidentUser().socket.emit(
-          'GET_MEMO',
-          `${this.users[info].username} is a ${partyAffiliation}`,
-        );
+        this.getPresidentUser().socket.emit('GET_MEMO', {
+          text: `${this.users[info].username} is a ${partyAffiliation}`,
+          graphics: [`${partyAffiliation}-affiliation`],
+        });
       },
       election: () => {
-        memoToUsersExcludingPresident(`${this.getPresidentUser().username} has chosen ${
-          this.users[info].username
-        } to be president through a special election`);
+        memoToUsersExcludingPresident({
+          text: `${this.getPresidentUser().username} has chosen ${
+            this.users[info].username
+          } to be president through a special election`,
+          graphics: [this.getPresidentUser().id, info],
+        });
         this.setGameStage('chooseChancellor');
         Object.values(this.users).forEach((user) => {
           user.isChancellor = false;
@@ -412,22 +447,24 @@ class GameManager {
 
   handleVetoResponse(response) {
     if (response) {
+      this.io.emit('GET_MEMO', {
+        text: `${this.getPresidentUser().username} has approved ${
+          this.getChancellorUser().username
+        }'s veto request`,
+        graphics: [this.getPresidentUser().id, this.getChancellorUser().id],
+      });
       this.discardPile = this.discardPile.concat(this.getChancellorUser().cards);
       this.increaseFailedGovernments();
-      this.io.emit(
-        'GET_MEMO',
-        `${this.getPresidentUser().username} has approved ${
-          this.getChancellorUser().username
-        }'s veto request`,
-      );
-      this.chooseNextChancellor();
+      if (!this.gameOver) {
+        this.chooseNextChancellor();
+      }
     } else {
-      this.io.emit(
-        'GET_MEMO',
-        `${this.getPresidentUser().username} has denied ${
+      this.io.emit('GET_MEMO', {
+        text: `${this.getPresidentUser().username} has denied ${
           this.getChancellorUser().username
         }'s veto request`,
-      );
+        graphics: [this.getPresidentUser().id, this.getChancellorUser().id],
+      });
       this.getPresidentUser().usedVeto = true;
     }
   }
@@ -436,10 +473,10 @@ class GameManager {
     this.failedGovernmentCounter += 1;
     if (this.failedGovernmentCounter === 3) {
       this.failedGovernmentCounter = 0;
-      this.io.emit(
-        'GET_MEMO',
-        `A ${this.drawPile[0]} policy was passed because of 3 failed governments`,
-      );
+      this.io.emit('GET_MEMO', {
+        text: `A ${this.drawPile[0]} policy was passed because of 3 failed governments`,
+        graphics: [`${this.drawPile[0]}-policy`],
+      });
       this.passTopPolicy();
       this.drawPileShuffle();
       Object.values(this.users).forEach((user) => {
