@@ -8,8 +8,16 @@ const game = new GameManager(io);
 
 io.on('connection', (socket) => {
   socket.on('JOIN_GAME', (data, callback) => {
-    game.addUser(socket, data.username);
-    callback(); // This acknowledges the server received the join request
+    if (game.username === '') {
+      callback('No username');
+    } else if (game.hasUserWithUsername(data.username)) {
+      callback('A player already has this username');
+    } else if (!game.gameOver) {
+      callback('Game already in progress');
+    } else {
+      game.addUser(socket, data.username);
+      callback(true); // True signifies success
+    }
   });
   socket.on('START_GAME', () => {
     if (game.canStartGame(socket.id)) {
