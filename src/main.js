@@ -8,12 +8,14 @@ const game = new GameManager(io);
 
 io.on('connection', (socket) => {
   socket.on('JOIN_GAME', (data, callback) => {
-    if (game.username === '') {
+    if (!game.gameOver) {
+      callback('Game already in progress');
+    } else if (game.getUserCount === 10) {
+      callback('Lobby is full');
+    } else if (game.username === '') {
       callback('No username');
     } else if (game.hasUserWithUsername(data.username)) {
       callback('A player already has this username');
-    } else if (!game.gameOver) {
-      callback('Game already in progress');
     } else {
       game.addUser(socket, data.username);
       callback(true); // True signifies success
@@ -56,6 +58,11 @@ io.on('connection', (socket) => {
   socket.on('RESPOND_VETO_REQUEST', (response) => {
     if (game.canRespondVetoRequest(socket.id)) {
       game.handleVetoResponse(response);
+    }
+  });
+  socket.on('CLOSE_GAME', () => {
+    if (game.canCloseGame(socket.id)) {
+      game.closeGame();
     }
   });
   socket.on('disconnect', (reason) => {
