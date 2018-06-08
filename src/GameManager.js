@@ -7,6 +7,35 @@ class GameManager {
   constructor(io) {
     this.users = {};
     this.io = io;
+    this.resetState();
+    // Set to false when game starts
+    this.gameOver = true;
+  }
+
+  addUser(socket, username) {
+    const isHost = this.getUserCount() === 0;
+    this.users[socket.id] = new User(socket, username, isHost);
+    this.syncUsers();
+  }
+
+  canStartGame(socketId) {
+    return this.users[socketId].host && this.getUserCount() >= 5 && this.gameOver;
+  }
+
+  startGame() {
+    this.resetState();
+    this.gameOver = false;
+    this.io.emit('SYNC_SCORE', {
+      liberal: this.liberalCardsPlayed,
+      fascist: this.fascistCardsPlayed,
+    });
+    this.assignRoles();
+    this.syncUsers();
+    this.setGameStage('chooseChancellor');
+    this.io.emit('SET_GAME_STATE', 'game');
+  }
+
+  resetState() {
     this.gameStage = 'chooseChancellor';
     this.currentPresidentIndex = 0;
 
@@ -18,31 +47,6 @@ class GameManager {
     this.liberalCardsPlayed = 0;
     this.fascistCardsPlayed = 0;
     this.failedGovernmentCounter = 0;
-
-    // Reset when game starts
-    this.gameOver = true;
-  }
-
-  addUser(socket, username) {
-    const isHost = this.getUserCount() === 0;
-    this.users[socket.id] = new User(socket, username, isHost);
-    this.syncUsers();
-  }
-
-  canStartGame(socketId) {
-    return this.users[socketId].host && this.getUserCount() >= 5;
-  }
-
-  startGame() {
-    this.gameOver = false;
-    this.io.emit('SET_GAME_STATE', 'game');
-    this.io.emit('SYNC_SCORE', {
-      liberal: this.liberalCardsPlayed,
-      fascist: this.fascistCardsPlayed,
-    });
-    this.assignRoles();
-    this.syncUsers();
-    this.setGameStage('chooseChancellor');
   }
 
   assignRoles() {
@@ -60,6 +64,8 @@ class GameManager {
     knuthShuffle(options);
     let iterator = 0;
     Object.values(this.users).forEach((user) => {
+      user.isPresident = false;
+      user.isChancellor = false;
       switch (options[iterator]) {
         case 'hitler': {
           user.isLiberal = false;
@@ -490,6 +496,16 @@ class GameManager {
 
   hasUserWithUsername(username) {
     return Object.values(this.users).findIndex(user => user.username === username) !== -1;
+  }
+
+  canCloseGame(id) {
+    return this.gameOver && this.users[id].host;
+  }
+
+  closeGame() {
+    this.io.emit('SET_GAME_STATE', 'login');
+    this.resetState();
+    this.users = {};
   }
 }
 
