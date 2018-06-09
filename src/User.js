@@ -14,6 +14,7 @@ class User {
     this.isTermLimited = false;
     this.usedVeto = false;
     this.roleImage = 1;
+    this.disconnected = false;
   }
 
   getInfo(deservesFullInfo) {
