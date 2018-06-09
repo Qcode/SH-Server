@@ -9,7 +9,11 @@ const game = new GameManager(io);
 io.on('connection', (socket) => {
   socket.on('JOIN_GAME', (data, callback) => {
     if (!game.gameOver) {
-      callback('Game already in progress');
+      if (game.isReconnectingUser(data.username)) {
+        game.reconnectUser(socket, data.username);
+      } else {
+        callback('Game already in progress');
+      }
     } else if (game.getUserCount === 10) {
       callback('Lobby is full');
     } else if (game.username === '') {
@@ -24,19 +28,15 @@ io.on('connection', (socket) => {
   socket.on('START_GAME', () => {
     if (game.canStartGame(socket.id)) {
       game.startGame();
-    } else {
-      console.log('Invalid permissions to start game');
     }
   });
   socket.on('SUBMIT_CHANCELLOR', (chancellorId) => {
     if (game.isValidChancellor(chancellorId, socket.id)) {
       game.nominateChancellor(chancellorId);
-    } else {
-      console.log('Invalid chancellor submission');
     }
   });
   socket.on('VOTE_FOR_CHANCELLOR', (vote) => {
-    if (GameManager.isValidVote(vote)) {
+    if (game.isValidVote(socket.id, vote)) {
       game.logChancellorVote(socket.id, vote);
     }
   });
@@ -65,8 +65,8 @@ io.on('connection', (socket) => {
       game.closeGame();
     }
   });
-  socket.on('disconnect', (reason) => {
-    console.log(reason);
+  socket.on('disconnect', () => {
+    game.disconnectUser(socket.id);
   });
 });
 

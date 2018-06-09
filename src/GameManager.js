@@ -19,7 +19,13 @@ class GameManager {
   }
 
   canStartGame(socketId) {
-    return this.users[socketId].host && this.getUserCount() >= 5 && this.gameOver;
+    return (
+      this.users[socketId] &&
+      this.users[socketId].host &&
+      this.getUserCount() >= 5 &&
+      this.gameOver &&
+      !this.hasDisconnectedUsers()
+    );
   }
 
   startGame() {
@@ -118,12 +124,15 @@ class GameManager {
   isValidChancellor(chancellorId, presidentId) {
     // To-Do: Keep track of users for term limits
     return (
+      this.users[presidentId] &&
+      this.users[chancellorId] &&
       this.users[presidentId].isPresident &&
       chancellorId !== presidentId &&
       this.users[chancellorId] &&
       !this.users[chancellorId].isDead &&
       !this.users[chancellorId].isTermLimited &&
-      this.gameStage === 'chooseChancellor'
+      this.gameStage === 'chooseChancellor' &&
+      !this.hasDisconnectedUsers()
     );
   }
 
@@ -217,15 +226,17 @@ class GameManager {
     return Object.values(this.users).filter(user => user.isChancellor)[0];
   }
 
-  static isValidVote(vote) {
-    return vote === 0 || vote === 1;
+  isValidVote(userId, vote) {
+    return this.users[userId] && !this.hasDisconnectedUsers() && (vote === 0 || vote === 1);
   }
 
   isValidDiscard(card, userId) {
     return (
+      this.users[userId] &&
       ((this.gameStage === 'presidentPolicySelect' && userId === this.getPresidentUser().id) ||
         (this.gameStage === 'chancellorPolicySelect' && userId === this.getChancellorUser().id)) &&
-      this.users[userId].cards.indexOf(card) !== -1
+      this.users[userId].cards.indexOf(card) !== -1 &&
+      !this.hasDisconnectedUsers()
     );
   }
 
@@ -318,13 +329,17 @@ class GameManager {
   }
 
   canEnactFascistPower(userEnacting, userToEnact) {
-    const ableToEnactOnUser = userToEnact ? !this.users[userToEnact].isDead : true;
-    return (
-      this.gameStage === 'fascistPower' &&
-      this.getPresidentUser().id === userEnacting &&
-      this.getPresidentUser().id !== userToEnact &&
-      ableToEnactOnUser
-    );
+    if (this.users[userEnacting] && ((userToEnact && this.users[userToEnact]) || !userToEnact)) {
+      const ableToEnactOnUser = userToEnact ? !this.users[userToEnact].isDead : true;
+      return (
+        this.gameStage === 'fascistPower' &&
+        this.getPresidentUser().id === userEnacting &&
+        this.getPresidentUser().id !== userToEnact &&
+        ableToEnactOnUser &&
+        !this.hasDisconnectedUsers()
+      );
+    }
+    return false;
   }
 
   enactFascistPower(info) {
@@ -433,9 +448,11 @@ class GameManager {
 
   canSubmitVetoRequest(userId) {
     return (
+      this.users[userId] &&
       this.fascistCardsPlayed === 5 &&
       userId === this.getChancellorUser().id &&
-      !this.getChancellorUser().usedVeto
+      !this.getChancellorUser().usedVeto &&
+      !this.hasDisconnectedUsers()
     );
   }
 
@@ -446,10 +463,12 @@ class GameManager {
 
   canRespondVetoRequest(userId) {
     return (
+      this.users[userId] &&
       this.fascistCardsPlayed === 5 &&
       userId === this.getPresidentUser().id &&
       this.getChancellorUser().usedVeto &&
-      !this.getPresidentUser().usedVeto
+      !this.getPresidentUser().usedVeto &&
+      !this.hasDisconnectedUsers()
     );
   }
 
@@ -499,13 +518,68 @@ class GameManager {
   }
 
   canCloseGame(id) {
-    return this.gameOver && this.users[id].host;
+    return this.users[id] && this.gameOver && this.users[id].host;
   }
 
   closeGame() {
     this.io.emit('SET_GAME_STATE', 'login');
     this.resetState();
     this.users = {};
+  }
+
+  disconnectUser(userId) {
+    if (this.users[userId]) {
+      this.users[userId].disconnected = true;
+      this.io.emit('GET_MEMO', {
+        text: `${
+          this.users[userId].username
+        } has disconnected. Game is paused until the player reconnects.`,
+        graphics: [],
+      });
+    }
+    if (Object.values(this.users).findIndex(user => !user.disconnected) === -1) {
+      Object.keys(this.users).forEach((userKey) => {
+        delete this.users[userKey];
+      });
+      this.gameOver = true;
+    }
+  }
+
+  hasDisconnectedUsers() {
+    return Object.values(this.users).findIndex(user => user.disconnected) !== -1;
+  }
+
+  isReconnectingUser(username) {
+    return (
+      !this.gameOver &&
+      Object.values(this.users).findIndex(user => user.disconnected && user.username === username) !== -1
+    );
+  }
+
+  reconnectUser(socket, username) {
+    let user = Object.values(this.users).filter(userToFind => userToFind.username === username)[0];
+    this.users[socket.id] = user;
+    delete this.users[user.id];
+    user = this.users[socket.id];
+    user.id = socket.id;
+    user.socket = socket;
+    user.disconnected = false;
+    this.io.emit('GET_MEMO', { text: `${username} has rejoined the game.`, graphics: [] });
+    this.syncUsers();
+    socket.emit('SET_GAME_STAGE', this.gameStage);
+    socket.emit('SYNC_FAILED_GOVERNMENTS', this.failedGovernmentCounter);
+    socket.emit('SYNC_SCORE', {
+      liberal: this.liberalCardsPlayed,
+      fascist: this.fascistCardsPlayed,
+    });
+    user.socket.emit('SYNC_USER', user.getSelfInfo());
+
+    if (this.gameStage === 'fascistPower') {
+      this.io.emit('FASCIST_POWER', this.getFascistPower());
+      this.getPresidentUser().socket.emit('FASCIST_INFO', this.drawPile.slice(0, 3));
+    }
+
+    socket.emit('SET_GAME_STATE', 'game');
   }
 }
 
